@@ -40,7 +40,6 @@ class NoisyLinear(nn.Module):
         """
         Args:
             param1 (int): size max value of the random noise
-
         Return:
             the layer values
         """
@@ -58,7 +57,6 @@ class NoisyLinear(nn.Module):
         """
         Args:
            param1(int) : input
-
         Return
              if train is set add noise for exporation
              else without the noise
@@ -80,20 +78,19 @@ class DQN(nn.Module):
             param2 (int): state_size
             param3 (int): action_space
         """
-        super().__init__()
+        super(DQN).__init__()
         self.atoms = args.atoms
         self.action_space = action_space
 
-        self.fc_h_v = NoisyLinear(state_size, args.hidden_size, std_init=args.noisy_std)
-        self.fc_h1_v = NoisyLinear(args.hidden_size, 64, std_init=args.noisy_std)
-        self.fc_h_a = NoisyLinear(state_size, args.hidden_size, std_init=args.noisy_std)
-        self.fc_h1_a = NoisyLinear(args.hidden_size, 64, std_init=args.noisy_std)
-        self.fc_z_v = NoisyLinear(64, self.atoms, std_init=args.noisy_std)
-        self.fc_z_a = NoisyLinear(64, action_space * self.atoms, std_init=args.noisy_std)
+        self.fc_h_v = NoisyLinear(state_size, args.hidden_size_1, std_init=args.noisy_std)
+        self.fc_h1_v = NoisyLinear(args.hidden_size_1, args.hidden_size_2, std_init=args.noisy_std)
+        self.fc_h_a = NoisyLinear(state_size, args.hidden_size_1, std_init=args.noisy_std)
+        self.fc_h1_a = NoisyLinear(args.hidden_size_1, args.hidden_size_2, std_init=args.noisy_std)
+        self.fc_z_v = NoisyLinear(args.hidden_size_2, self.atoms, std_init=args.noisy_std)
+        self.fc_z_a = NoisyLinear(args.hidden_size_2, action_space * self.atoms, std_init=args.noisy_std)
 
     def forward(self, x, log=False):
         """ forward path for the network
-
         Args:
            param1 (torch) state
            param2 (bool) log
@@ -116,3 +113,30 @@ class DQN(nn.Module):
         for name, module in self.named_children():
             if 'fc' in name:
                 module.reset_noise()
+
+
+
+class QNetwork(nn.Module):
+    """ Standard NN for the DQN """
+    def __init__(self, state_size, action_size, hidden_size1, hidden_size2, seed=1):
+
+        """Initialize parameters and build model.
+        Args:
+            param1 (int): Dimension of each state
+            param2 (int): Dimension of each action
+            param3 (int): Nodes of the hidden layer 1
+            param4 (int): Nodes of the hidden layer 2
+            param5 (int): Random seed
+        """
+        super(QNetwork, self).__init__()
+        self.seed = torch.manual_seed(seed)
+        self.model = nn.Sequential(nn.Linear(state_size, hidden_size1), nn.ReLU(), nn.Linear(hidden_size1, hidden_size2), nn.ReLU(), nn.Linear(hidden_size2, action_size))
+
+
+    def forward(self, state):
+        """" forward path for the NN
+        Args:
+            param1 (torch_tensor): current state as input
+        Return:
+        """
+        return self.model.forward(state)
