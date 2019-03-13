@@ -22,7 +22,7 @@ def main(args):
                         continue
                     if counter % (args.env_num + args.num_parallel) == 0:
                         print(counter)
-                        os.system('python3 ./training.py \
+                        os.system(f'python3 ./training.py \
                                 --priority-exponent {a} \
                                 --priority-weight {b}  \
                                 --eps_decay {eps} \
