@@ -35,8 +35,8 @@ The task is episodic, and in order to solve the environment, your agent must get
 ### Instructions
 1. Clone the repository and navigate to the downloaded folder.
 ```	
-     git clone https://github.com/ChrisProgramming2018/DeepLearningProjects.git
-     cd DeepLearningProjects/
+     git clone https://github.com/ChrisProgramming2018/DeepReinforcementLearningProjects.git
+     cd DeepReinforcementLearningProjects
 ```	
 2. Create a virtual enviroment 
 ```	
@@ -62,11 +62,24 @@ The task is episodic, and in order to solve the environment, your agent must get
      rm Banana_Linux.zip 
 ```
 6.  Use  different  hyper parameter values to find the best 
-
+```
+	python3  hyperparametersearch.py
+```
 7. Train agent with the "best" hyper parameter   
-
+```
+	python3  training.py
+```
 8. Watch smart agent (load trained network weights) in the environment collecting the yellows bananas   
+```
+	python3 smart_agent.py 
+```
+9. Compare the 3 different agents
+```
+	python3 compare.py
+```
 
+10. Issues
+    In case of any problem check if the correct parameters are set and the pathnames are correct
 The research paper from the used algorithms
 
 - [x] DQN [[2]](#references)
