@@ -45,6 +45,7 @@ The task is episodic, and in order to solve the environment, your agent must get
 3. Activate the Enviroment
 ```
 	source p1_navigation/bin/activate
+	cd p1_navigation
 ```
 
 4.  **Install all dependencies**, use the requirements.txt file
