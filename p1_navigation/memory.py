@@ -76,10 +76,9 @@ class SegmentTree(object):
         left, right = 2 * index + 1, 2 * index + 2
         if left >= len(self.sum_tree):
             return index
-        elif value <= self.sum_tree[left]:
+        if value <= self.sum_tree[left]:
             return self._retrieve(left, value)
-        else:
-            return self._retrieve(right, value - self.sum_tree[left])
+        return self._retrieve(right, value - self.sum_tree[left])
 
 
     def find(self, value):
@@ -180,6 +179,7 @@ class ReplayMemory(object):
         while not valid:
             sample = np.random.uniform(i * segment, (i + 1) * segment)  # Uniformly in a segment
             prob, idx, tree_idx = self.transitions.find(sample)  # sample from tree with un-norma
+            valid = True  #  conditions are valid but extra cons around buffer index 0
             if (self.transitions.index - idx) % self.capacity > self.n_step and (idx - self.transitions.index) % self.capacity >= self.history and prob != 0:
                 valid = True  #  conditions are valid but extra cons around buffer index 0
         # Retrieve all required transition data (from t - h to t + n)
