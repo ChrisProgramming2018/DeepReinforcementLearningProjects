@@ -36,7 +36,7 @@ def main(args):
     dqn = Agent(args, state_size, action_size)
 
     # load the weights of the trained  Neural Network
-    load_checkpoint('dqn_rainbow_agent.pth.tar', dqn.online_net)
+    load_checkpoint('dqn_rainbow_agent.pth.tar', dqn.qnetwork_local)
     for _ in range(1):
         env_info = env.reset()[brain_name] # reset the environment
         state = env_info.vector_observations[0]
@@ -62,7 +62,8 @@ if __name__ == "__main__":
     parser.add_argument('--disable-cuda', action='store_true', help='Disable CUDA')
     parser.add_argument('--T-max', type=int, default=int(1000), metavar='STEPS', help='Number of training steps (4x number of frames)')
     parser.add_argument('--history-length', type=int, default=1, metavar='T', help='Number of consecutive states processed')
-    parser.add_argument('--hidden-size', type=int, default=128, metavar='SIZE', help='Network hidden size')
+    parser.add_argument('--hidden-size-1', type=int, default=128, metavar='SIZE', help='Network hidden size')
+    parser.add_argument('--hidden-size-2', type=int, default=64, metavar='SIZE', help='Network hidden size')
     parser.add_argument('--noisy-std', type=float, default=0.1, metavar='sigmar', help='Initial standard deviation of noisy linear layers')
     parser.add_argument('--atoms', type=int, default=51, metavar='C', help='Discretised size of value distribution')
     parser.add_argument('--V-min', type=float, default=-10, metavar='V', help='Minimum of value distribution support')

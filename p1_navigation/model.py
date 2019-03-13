@@ -78,7 +78,7 @@ class DQN(nn.Module):
             param2 (int): state_size
             param3 (int): action_space
         """
-        super(DQN).__init__()
+        super().__init__()
         self.atoms = args.atoms
         self.action_space = action_space
 
