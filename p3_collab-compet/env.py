@@ -6,21 +6,22 @@ from unityagents import UnityEnvironment
 
 class Env(object):
     """ tennis environment from unity """
-    def __init__(self):
+    def __init__(self,no_graphic=True, train_mode=True, seed=2):
         """ init memeber variables   """
-        self.env = UnityEnvironment(file_name='Tennis_Linux/Tennis.x86_64', no_graphics=True)
+        self.env = UnityEnvironment(file_name='Tennis_Linux/Tennis.x86_64', no_graphics=no_graphic, seed=seed)
         self.brain_name = self.env.brain_names[0]
         self.brain = self.env.brains[self.brain_name]
-        self.env_info = self.env.reset(train_mode=True)[self.brain_name]
+        self.env_info = self.env.reset(train_mode=train_mode)[self.brain_name]
         self.action_size = self.brain.vector_action_space_size
         self.state_size = self.env_info.vector_observations.shape[1]
         self.num_agents = len(self.env_info.agents)
+        self.train_mode = train_mode
 
     def reset(self):
         """ resets the environment set the rewards to zero
         Returns: states and scores array
         """
-        env_info = self.env.reset(train_mode=True)[self.brain_name]
+        env_info = self.env.reset(train_mode=self.train_mode)[self.brain_name]
         states = env_info.vector_observations
         scores = np.zeros(self.num_agents)
         return states, scores
