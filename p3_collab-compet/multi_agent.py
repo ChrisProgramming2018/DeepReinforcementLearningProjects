@@ -23,14 +23,14 @@ class MultiAgent(object):
         for agent in self.ddpg_agents:
             agent.noise_reset()
 
-    def act(self, all_states):
+    def act(self, all_states, explore=True):
         """  ueses the actor network from each agent to choose the actions
              according to the policy
         Args:
            param1:(numpy) all_states
         Return: actions from all agents
         """
-        actions = [agent.act(np.expand_dims(states, axis=0)) for agent, states in zip(self.ddpg_agents, all_states)]
+        actions = [agent.act(np.expand_dims(states, axis=0), explore) for agent, states in zip(self.ddpg_agents, all_states)]
         return actions
 
     def step(self, states, actions, rewards, next_states, dones):
