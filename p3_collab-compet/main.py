@@ -17,8 +17,10 @@ def main(args):
     args.num_agents = env.num_agents
     args.action_size = env.action_size
     args.state_size = env.state_size
-    scores = ddpg(env, MultiAgent(args, memory), args.n_episodes)
-    plot_score(scores)
+    scores, average, agent_1, agent_2 = ddpg(env, MultiAgent(args, memory), args.n_episodes)
+    plot_score(scores, average, agent_1, agent_2)
+    plot_score(scores, average, agent_1, agent_2, 15)
+    plot_score(scores, average, agent_1, agent_2, 7)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='MultiAgent')
