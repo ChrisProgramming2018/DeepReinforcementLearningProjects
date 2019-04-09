@@ -22,26 +22,44 @@ For this project, we will provide you with two separate versions of the Unity en
 - The first version contains a single agent.
 - The second version contains 20 identical agents, each with its own copy of the environment.  
 
-The second version is useful for algorithms like [PPO](https://arxiv.org/pdf/1707.06347.pdf), [A3C](https://arxiv.org/pdf/1602.01783.pdf), and [D4PG](https://openreview.net/pdf?id=SyZipzbCb) that use multiple (non-interacting, parallel) copies of the same agent to distribute the task of gathering experience.  
-
-### Solving the Environment
-
-Note that your project submission need only solve one of the two versions of the environment. 
 
 #### Option 1: Solve the First Version
 
 The task is episodic, and in order to solve the environment,  your agent must get an average score of +30 over 100 consecutive episodes.
 
+### Instructions
+1. Clone the repository and navigate to the downloaded folder.
+```	
+     git clone https://github.com/ChrisProgramming2018/DeepReinforcementLearningProjects.git
+     cd DeepReinforcementLearningProjects
+```	
+2. Create a virtual enviroment 
+```	
+     virtualenv -p python3 p2_continousControl
+```
+3. Activate the Enviroment
+```
+	source p2_continousControl/bin/activate
+	cd p2_continousControl
+```
 
-### Getting Started
+4.  **Install all dependencies**, use the requirements.txt file
 
-1. Download the environment from one of the links below.  You need only select the environment that matches your operating system:
-
-    - **_Version 1: One (1) Agent_**
-        - Linux: [click here](https://s3-us-west-1.amazonaws.com/udacity-drlnd/P2/Reacher/one_agent/Reacher_Linux.zip)
+```
+	pip3 install -r requirements.txt
+```
+5.  Download the environment for linux 
+```
+	click on the link
+```
+```
+     download it to the same folder p1_navigation
+     unzip 
+     rm 
        
 
     
     
 
 You can read more about this environment in the ML-Agents GitHub 
+
