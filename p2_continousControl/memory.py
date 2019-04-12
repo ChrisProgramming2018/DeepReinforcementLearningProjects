@@ -1,69 +1,40 @@
 """ Replay Buffer to save the experience of the agent """
+
+from collections import deque, namedtuple
+import random
+import torch
 import numpy as np
 
+class ReplayBuffer(object):
+    """Fixed-size buffer to store experience tuples."""
+    def __init__(self, config):
+        """Initialize a ReplayBuffer object.
 
-class Replay(object):
-    """  Replay Buffer    """
-    def __init__(self, memory_size, batch_size):
-        """ set member variables
         Args:
-            param1: (int) memory_size
-            param2: (int) batch_size
+            param1: ()
         """
-        self.memory_size = memory_size
-        self.batch_size = batch_size
-        self.data = []
-        self.pos = 0
+        self.memory = deque(maxlen=config.memory_capacity)  # internal memory (deque)
+        self.batch_size = config.batch_size
+        self.experience = namedtuple("Experience", field_names=["state", "action", "reward", "next_state", "done"])
+        self.device = config.device
 
-    def feed(self, experience):
-        """
-            saves  state reward action next_state
-        Args:
-           param1: (tuple) experience
-        """
-        if self.pos >= len(self.data):
-            self.data.append(experience)
-        else:
-            self.data[self.pos] = experience
-        self.pos = (self.pos + 1) % self.memory_size
+    def add(self, state, action, reward, next_state, done):
+        """Add a new experience to memory."""
+        e = self.experience(state, action, reward, next_state, done)
+        self.memory.append(e)
 
-    def feed_batch(self, experience):
-        """
-        saves a batch of experience
-        Args:
-           param1: (tuple) experience
-        """
-        for exp in experience:
-            self.feed(exp)
+    def sample(self):
+        """Randomly sample a batch of experiences from memory."""
+        experiences = random.sample(self.memory, k=self.batch_size)
 
-    def sample(self, batch_size=None):
-        """
-        returns experience of batch_size
-        Args:
-           param1: (int) batch_size
-        Return: experience of the amount  batch_size
-        """
-        if self.empty():
-            return None
-        if batch_size is None:
-            batch_size = self.batch_size
+        states = torch.from_numpy(np.vstack([e.state for e in experiences if e is not None])).float().to(self.device)
+        actions = torch.from_numpy(np.vstack([e.action for e in experiences if e is not None])).float().to(self.device)
+        rewards = torch.from_numpy(np.vstack([e.reward for e in experiences if e is not None])).float().to(self.device)
+        next_states = torch.from_numpy(np.vstack([e.next_state for e in experiences if e is not None])).float().to(self.device)
+        dones = torch.from_numpy(np.vstack([e.done for e in experiences if e is not None]).astype(np.uint8)).float().to(self.device)
 
-        sampled_indices = [np.random.randint(0, len(self.data)) for _ in range(batch_size)]
-        sampled_data = [self.data[ind] for ind in sampled_indices]
-        batch_data = list(map(lambda x: np.asarray(x), zip(*sampled_data)))
-        return batch_data
+        return (states, actions, rewards, next_states, dones)
 
     def size(self):
-        """
-        Return: size of Replay buffer
-        """
-        return len(self.data)
-
-    def empty(self):
-        """
-
-        Return: True if replay buffer is empty
-        """
-        if self.data:
-            return False
-        return True
+        """Return the current size of internal memory."""
+        return len(self.memory)
