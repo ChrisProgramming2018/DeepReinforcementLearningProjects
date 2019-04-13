@@ -61,11 +61,11 @@ The task is episodic, and in order to solve the environment,  your agent must ge
      
      rm Reacher_Linux.zip
 ```
-5.  Train agent 
+6.  Train agent 
 ```
    python3 ddpg_main.py
 ```
-5.  Watch smart agnet solve the 
+7.  Watch all 20 smart agent moving the arms 
  ```
    python3 watch_samrt_agent.py 
 ``` 
