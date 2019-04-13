@@ -1,168 +1,119 @@
-"""
-Copyright (C) 2017 Shangtong Zhang(zhangshangtong.cpp@gmail.com)
-Permission given to modify the code as long as you keep this
-declaration at the top
-
-I modified the file to full fill my purpose
-
-"""
-
+import numpy as np
+import copy 
+from collections import namedtuple, deque
+import random
+from model import Actor, Critic
+from noise import OUNoise
+from memory import ReplayBuffer
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
-from envs import tensor
+import torch.optim as optim
+
+
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
 
 class DDPGAgent(object):
-    """ use the DDPG from the research paper """
     def __init__(self, config):
+        """Initialize an Agent object.
+    
         """
+    
+        self.state_size = config.state_dim
+        self.action_size = config.action_dim
+        self.seed = np.random.seed(config.seed)
+        self.n_agents = config.n_agents
+        self.batch_size = config.batch_size
+        self.tau = config.tau
+        self.gamma = config.gamma
+        # Actor Network (w/ Target Network)
+        self.actor_local = Actor(config).to(config.device)
+        self.actor_target = Actor(config).to(config.device)
+        self.actor_optimizer = optim.Adam(self.actor_local.parameters(), lr=config.lr_actor)
+    
+        # Critic Network (w/ Target Network)
+        self.critic_local = Critic(config).to(config.device)
+        self.critic_target = Critic(config).to(config.device)
+        self.critic_optimizer = optim.Adam(self.critic_local.parameters(), lr=config.lr_critic)
+    
+        # Noise process
+        self.noise = OUNoise(config)
 
+        # Replay memory
+        self.memory = ReplayBuffer(config)
+        #self.timesteps = 0
+
+    def act(self, states, epsilon, add_noise=True):
+        """ Given a list of states for each agent it returns the actions to be
+        taken by each agent based on the current policy.
+        Returns a numpy array of shape [n_agents, n_actions]
+        NOTE: clips actions to be between -1, 1
         Args:
-           param1 (config): config
+            states:    () one row of state for each agent [n_agents, n_actions]
+            add_noise: (bool) add noise to the actions?
         """
-        self.config = config
-        self.network = config.network_fn()
-        self.target_network = config.network_fn()
-        self.target_network.load_state_dict(self.network.state_dict())
-        self.replay = config.replay_fn()
-        self.random_process = config.random_process_fn()
-        self.total_steps = 0
-        self.state = None
-        self.episode_reward = 0
-        self.episode_rewards = []
+        states = torch.from_numpy(states).float().to(device)
+        self.actor_local.eval()
+        with torch.no_grad():
+            actions = self.actor_local(states).cpu().data.numpy()
+        self.actor_local.train()
+        if add_noise and epsilon > np.random.random():
+            actions += [self.noise.sample() for _ in range(self.n_agents)]
+        return np.clip(actions, -1, 1)
+    
+    def reset_noise(self):
+        """ """
+        self.noise.reset()
 
-    def soft_update(self, target, src):
+    def learn(self):
+        """Update policy and value parameters using given batch of experience tuples.
+        Q_targets = r + γ * critic_target(next_state, actor_target(next_state))     where:
+        actor_target(state) -> action
+        critic_target(state, action) -> Q-value
         """
-
-        Args:
-            param1 (torch): target
-            param2 (torch): src
-        """
-        for target_param, param in zip(target.parameters(), src.parameters()):
-            target_param.detach_()
-            target_param.copy_(target_param * (1.0 - self.config.target_network_mix) + param * self.config.target_network_mix)
-
-
-    def learn(self, replay_buffer):
-        """ actor critic  """
+        if self.batch_size > self.memory.size(): 
+            return 
+        states, actions, rewards, next_states, dones = self.memory.sample()
         
-        experiences = replay_buffer.sample()
-        states, actions, rewards, next_states, terminals = experiences
-        #states = states.squeeze(1)
-        #actions = actions.squeeze(1)
-        rewards = tensor(rewards)
-        #rewards = rewards.unsqueeze(1)
-        #next_states = next_states.squeeze(1)
-        terminals = tensor(terminals)
-
-        phi_next = self.target_network.feature(next_states)
-        a_next = self.target_network.actor(phi_next)
-        q_next = self.target_network.critic(phi_next, a_next)
-        q_next = self.config.discount * q_next * (1 - terminals)
-        q_next.add_(rewards)
-        q_next = q_next.detach()
-        phi = self.network.feature(states)
-        q = self.network.critic(phi, tensor(actions))
-        critic_loss = (q - q_next).pow(2).mul(0.5).sum(-1).mean()
-     
-        # improve the crtic network weights
-        self.network.zero_grad()
+        # ---------------------------- update critic ---------------------------- 
+        
+        # Get predicted next-state actions and Q values from target model
+        
+        actions_next = self.actor_target(next_states)
+        Q_targets_next = self.critic_target(next_states, actions_next)
+        
+        # Compute Q targets for current states (y_i)
+        Q_targets = rewards + (self.gamma * Q_targets_next * (1 - dones))
+        
+        # Compute critic loss
+        Q_expected = self.critic_local(states, actions)
+        critic_loss = F.mse_loss(Q_expected, Q_targets)
+        
+        # Minimize the loss
+        self.critic_optimizer.zero_grad()
         critic_loss.backward()
-        self.network.critic_opt.step()
+        self.critic_optimizer.step()
         
-        # actor gets actions
-        phi = self.network.feature(states)
-        action = self.network.actor(phi)
-        policy_loss = -self.network.critic(phi.detach(), action).mean()
-
-        # improve the actor network weights
-        self.network.zero_grad()
-        policy_loss.backward()
-        self.network.actor_opt.step()
-
-        # copy the weigths from online(network) to the target network
-        self.soft_update(self.target_network, self.network)
-
-
-    def save(self, filename):
-        """ save the network weights to the given path
-        Args:
-            param1 (string): filename
+        # ---------------------------- update actor ---------------------------- #
+        # Compute actor loss
+        actions_pred = self.actor_local(states)
+        actor_loss = -self.critic_local(states, actions_pred).mean()
+        # Minimize the loss
+        self.actor_optimizer.zero_grad()
+        actor_loss.backward()
+        self.actor_optimizer.step()
+        
+        # ----------------------- update target networks ----------------------- #
+        self.soft_update(self.critic_local, self.critic_target)
+        self.soft_update(self.actor_local, self.actor_target)
+        
+    def soft_update(self, local_model, target_model):
+        """Soft update model parameters.
+        θ_target = τ*θ_local + (1 - τ)*θ_target
+    
+        local_model: PyTorch model (weights will be copied from)
+        target_model: PyTorch model (weights will be copied to)
+        tau (float): interpolation parameter
         """
-        torch.save(self.network.state_dict(), filename)
-
-    def load(self, filename):
-        """ loads the network from the filename
-        Args:
-            param1 (string):
-        """
-        state_dict = torch.load(filename, map_location=lambda storage, loc: storage)
-        self.network.load_state_dict(state_dict)
-
-
-class FCBody(nn.Module):
-    """ Fully connected layer"""
-    def __init__(self, state_dim, hidden_units=(64, 64), gate=F.relu):
-        """
-
-        Args:
-           param1 (int): state_dim
-           param2 (tuple): hidden_units
-           param3 (torch.activationfunction): gate
-        """
-        super(FCBody, self).__init__()
-        dims = (state_dim, ) + hidden_units
-        self.layers = nn.ModuleList([layer_init(nn.Linear(dim_in, dim_out)) for dim_in, dim_out in zip(dims[:-1], dims[1:])])
-        self.gate = gate
-        self.feature_dim = dims[-1]
-
-    def forward(self, x):
-        """
-
-        Args:
-            param1 (torch): x state
-        """
-        for layer in self.layers:
-            x = self.gate(layer(x))
-        return x
-
-def layer_init(layer, w_scale=1.0):
-    """
-
-    Args:
-        param1 (torch layer) : layer
-        param2 (float)
-    """
-    nn.init.orthogonal_(layer.weight.data)
-    layer.weight.data.mul_(w_scale)
-    nn.init.constant_(layer.bias.data, 0)
-    return layer
-
-class TwoLayerFCBodyWithAction(nn.Module):
-    """ special layer the network """
-    def __init__(self, state_dim, action_dim, hidden_units=(64, 64), gate=F.relu):
-        """
-
-        Args:
-           param1 (int): state_dim
-           param2 (tuple): hidden_units
-           param3 (torch.activationfunction): gate
-        """
-        super(TwoLayerFCBodyWithAction, self).__init__()
-        hidden_size1, hidden_size2 = hidden_units
-        self.fc1 = layer_init(nn.Linear(state_dim, hidden_size1))
-        self.fc2 = layer_init(nn.Linear(hidden_size1 + action_dim, hidden_size2))
-        self.gate = gate
-        self.feature_dim = hidden_size2
-
-    def forward(self, x, action):
-        """
-
-        Args:
-           param1 (x)
-
-        Return:
-        """
-        x = self.gate(self.fc1(x))
-        phi = self.gate(self.fc2(torch.cat([x, action], dim=1)))
-        return phi
+        for target_param, local_param in zip(target_model.parameters(), local_model.parameters()):
+            target_param.data.copy_(self.tau*local_param.data + (1.0-self.tau)*target_param.data)
