@@ -1,5 +1,4 @@
-""" main file to train agent in the env """
-from collections import deque
+""" main file to train agent in the env """  
 import argparse
 import time
 import torch
@@ -7,91 +6,114 @@ import torch.nn.functional as F
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
-from unityagents import UnityEnvironment
 
-from envs import OrnsteinUhlenbeckProcess
-from envs import LinearSchedule
+from collections import deque
+from unityagents import UnityEnvironment
+  
 from config import Config
-from ac_model import DeterministicActorCriticNet
-from memory import Replay
 from ddpg_agent import DDPGAgent
-from ddpg_agent import FCBody
-from ddpg_agent import TwoLayerFCBodyWithAction
+
 
 
 
 def main(arg):
     """
 
-    Args:
-        param1: (args)
-        param2: (config)
-
+     Args:
+         param1: (args)
     """
-    env = UnityEnvironment(file_name='Reacher_Linux/Reacher.x86_64', no_graphics=True)
-
+    env = UnityEnvironment(file_name='Reacher_Linux/Reacher.x86_64', no_graphics=True, seed=arg.seed)
     # get the default brain
     brain_name = env.brain_names[0]
     brain = env.brains[brain_name]
-
+    
     # reset the environment
     env_info = env.reset(train_mode=True)[brain_name]
-
+ 
     # number of agents
     num_agents = len(env_info.agents)
     print('Number of agents:', num_agents)
     states = env_info.vector_observations
-
+    
     print('Size of each action:', brain.vector_action_space_size)
     print(states.shape[1])
-
+    
+    epsilon = arg.epsilon
+    epsilon_min = arg.epsilon_min
+    epsilon_decay = arg.epsilon_decay
     config = Config()
     config.state_dim = states.shape[1]
     config.action_dim = brain.vector_action_space_size
-
-
-    config = set_config(config, arg)
-    agent = DDPGAgent(config)
-    agent.random_process = config.random_process_fn()
-    env_info = env.reset(train_mode=True)[brain_name]      # reset the environment
-    state = env_info.vector_observations                  # get the current state (for each agent)
+    config.n_agents = num_agents
+    set_config(config, arg)
     t_0 = time.time()
-    n_episodes = 1500
-    train_every = 10
-    total_steps = 0
+    n_episodes = arg.n_episodes
+    train_every = arg.train_every
     scores_window = deque(maxlen=100)  # last 100 scores
+    agent = DDPGAgent(config)
     scores = []
+    print("Start training")
     for i_episode in range(1, n_episodes+1):
-        episode_reward = 0
         env_info = env.reset(train_mode=True)[brain_name]
-        agent.random_process.reset_states()
-        while True:
-            total_steps += 1
-            action = agent.network(state)
-            action = action.cpu().detach().numpy()
-            action += agent.random_process.sample()
-            env_info = env.step(action)[brain_name]
-            next_state = env_info.vector_observations
-            reward = env_info.rewards[0]
-            done = np.array(env_info.local_done)
-            episode_reward += reward
-            agent.replay.feed([state, action, reward, next_state, done.astype(np.uint8)])
-            state = next_state
-            if  total_steps % train_every == 0:
-                agent.learn()
-            if done:
-                scores.append(episode_reward)
-                scores_window.append(episode_reward)
-                print('\rEpisode {}\t Average Score: {:.2f} , Score: {:.2f} Time: {:.2f}'.format(i_episode, np.mean(scores_window), episode_reward, time.time() - t_0))
+        states = env_info.vector_observations                  # get the current state (for each agent)
+        agent.reset_noise()
+        episode_reward = np.zeros(num_agents)
+        for t in range(arg.t_max):
+            actions = agent.act(states, epsilon)
+            env_info = env.step(actions)[brain_name]
+            next_states = env_info.vector_observations         # get next state (for each agent)
+            rewards = env_info.rewards                         # get reward (for each agent)
+            dones = env_info.local_done                        # see if episode finished
+            episode_reward += np.array(env_info.rewards)       # update the score (for each agent)
+            for state, action, reward, next_state, done in zip(states, actions, rewards, next_states, dones):
+                agent.memory.add(state, action, reward, next_state, done)
+            states = next_states
+            if t % train_every == 0:
+                for _ in range(arg.repeat_learning):
+                    agent.learn()
+            
+            if np.any(dones):
                 break
-            if np.mean(scores_window) >= 30:
-                print('total steps: ', total_steps)
-                agent.save('smart')
-                print("save smart agent")
-                return  scores
+        epsilon = epsilon * epsilon_decay   
+        epsilon = max(epsilon_min, epsilon)
+        scores_window.append(np.mean(episode_reward))
+        scores.append(np.mean(episode_reward))
+        duration = time.time() - t_0
+        sec = duration % 60
+        minutes = duration // 60
+        print('\rEpisode {}\t Average Score all: {:.2f} , Score: {:.2f} Time: min {:.2f} sec: {}'.format(i_episode, np.mean(scores_window), np.mean(episode_reward), minutes, sec))
+        if np.mean(scores_window) >= 30:
+            print("Enviroment solved save smart agent")
+            torch.save(agent.actor_local.state_dict(), 'checkpoint_actor.pth')
+            torch.save(agent.critic_local.state_dict(), 'checkpoint_critic.pth')
+            break
+    return scores
 
 
-def save_and_plot(score, model_num):
+
+def set_config(config, args):
+    """
+    
+    Args:
+       param1: (args): args
+       Return config
+    """
+    config.gamma = args.discount
+    config.tau = args.tau
+    config.hdl1 = args.hdl1
+    config.hdl2 = args.hdl2
+    config.hdl3 = args.hdl3
+    config.lr_actor = args.lr_actor
+    config.lr_critic = args.lr_critic
+    config.batch_size = args.batch_size
+    config.weight_decay = args.weight_decay
+    config.seed = args.seed
+    config.leak = args.leak
+    config.memory_capacity = args.memory_capacity
+    config.repeat_learning = args.repeat_learning
+    config.device =  torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+def save_and_plot(score, model_num=1):
     """ saves the result of the training into the given file
     Args:
         param1 (list): score
@@ -110,40 +132,28 @@ def save_and_plot(score, model_num):
     df.to_csv('scores.csv'.format(model_num))
 
 
-
-def set_config(config, args):
-    """
-    Args:
-       param1: (args): args
-    Return config
-    """
-    config.max_steps = int(1e6)
-    config.eval_interval = int(1e4)
-    config.eval_episodes = 20
-    config.save_interval = 10000
-    config.discounti = args.discount
-    config.network_fn = lambda: DeterministicActorCriticNet(config.state_dim, config.action_dim, actor_body=FCBody(config.state_dim, (args.hidden_size1, args.hidden_size2), gate=F.relu),
-            critic_body=TwoLayerFCBodyWithAction(config.state_dim, config.action_dim, (args.hidden_size1, args.hidden_size2), gate=F.relu), actor_opt_fn=lambda params: torch.optim.Adam(params, lr=args.lr), critic_opt_fn=lambda params: torch.optim.Adam(params, lr=args.lr))
-    config.replay_fn = lambda: Replay(memory_size=int(20000), batch_size=args.batch_size)
-    config.discount = 0.99
-    config.random_process_fn = lambda: OrnsteinUhlenbeckProcess(size=(config.action_dim, ), std=LinearSchedule(0.2))
-    config.min_memory_size = 10000
-    config.target_network_mix = 1e-3
-    config.DEVICE = 'cuda:0'
-
-    return config
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='DDPG')
-    parser.add_argument('--hidden-size1', type=int, default=400, metavar='SIZE', help='Network hidden size')
-    parser.add_argument('--hidden-size2', type=int, default=300, metavar='SIZE', help='Network hidden size')
+    parser.add_argument('--hdl1', type=int, default=256, metavar='SIZE', help='Network hidden size')
+    parser.add_argument('--hdl2', type=int, default=128, metavar='SIZE', help='Network hidden size')
+    parser.add_argument('--hdl3', type=int, default=128, metavar='SIZE', help='Network hidden size')
     parser.add_argument('--memory-capacity', type=int, default=int(1e6), metavar='CAPACITY', help='Experience replay memory capacity')
-    parser.add_argument('--lr', type=float, default=2e-4, metavar='mue', help='Learning rate')
-    parser.add_argument('--adam-eps', type=float, default=1e-8, metavar='eps', help='Adam epsilon')
-    parser.add_argument('--batch-size', type=int, default=128, metavar='SIZE', help='Batch size')
+    parser.add_argument('--lr-actor', type=float, default=1e-4, metavar='mue', help='Learning rate')
+    parser.add_argument('--lr-critic', type=float, default=3e-4, metavar='mue', help='Learning rate')
+    parser.add_argument('--weight-decay', default=0.0001, metavar='eps', help='weight_dacay')
+    parser.add_argument('--batch-size', type=int, default=1024, metavar='SIZE', help='Batch size')
+    parser.add_argument('--train-every', default=20)
+    parser.add_argument('--epsilon', default=1.0)
+    parser.add_argument('--epsilon-min', default=0.005)
+    parser.add_argument('--epsilon-decay', default=0.97)
     parser.add_argument('--discount', type=float, default=0.99, metavar='gamma', help='Discount factor')
     parser.add_argument('--n_episodes', default=500)
+    parser.add_argument('--repeat-learning', type=int, default=10)
+    parser.add_argument('--t-max', type=int, default=1000)
+    parser.add_argument('--seed', type=int, default=42)
+    parser.add_argument('--tau', type=float, default=1e-3)
+    parser.add_argument('--leak', type=float, default=0.01)
     parser.add_argument('--model_num', default=0)
     arg = parser.parse_args()
-    s = main(arg)
-    save_and_plot(s, arg.model_num)
+    array_scores = main(arg)
+    save_and_plot(array_scores)
