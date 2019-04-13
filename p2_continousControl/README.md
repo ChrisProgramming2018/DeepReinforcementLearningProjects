@@ -19,7 +19,7 @@ The observation space consists of 33 variables corresponding to position, rotati
 ### Distributed Training
 
 For this project, we will provide you with two separate versions of the Unity environment:
-- The first version contains a single agent.
+
 - The second version contains 20 identical agents, each with its own copy of the environment.  
 
 
@@ -49,17 +49,23 @@ The task is episodic, and in order to solve the environment,  your agent must ge
 	pip3 install -r requirements.txt
 ```
 5.  Download the environment for linux 
-```
-	click on the link
-```
-```
-     download it to the same folder p1_navigation
-     unzip 
-     rm 
-       
 
+
+- **_Version 2: Twenty (20) Agents_**
+        - Linux: [click here](https://s3-us-west-1.amazonaws.com/udacity-drlnd/P2/Reacher/Reacher_Linux.zip)
+
+```
+     download it to the same folder p2_continousControl
     
-    
-
-You can read more about this environment in the ML-Agents GitHub 
-
+     unzip  Reacher_Linux.zip
+     
+     rm Reacher_Linux.zip
+```
+5.  Train agent 
+```
+   python3 ddpg_main.py
+```
+5.  Watch smart agnet solve the 
+ ```
+   python3 watch_samrt_agent.py 
+``` 
