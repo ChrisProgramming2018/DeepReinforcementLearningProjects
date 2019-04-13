@@ -1,80 +1,81 @@
-""" Actor Crtic Implementation in pytorch  """
+""" Actor Crtic Implementation with   """
+import numpy as np
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 class Actor(nn.Module):
-    """ Actor Network implementaion """
-    def __init__(self, config):
-        """
+    def __init__(self, state_size, action_size, fc1=256, fc2=128, leak=0.01, seed=0):
+        """ 
+
         Args:
-           param1:  (int): Dimension of each state
+            param1:  (int): Dimension of each state
+            param2:action_size (int): Dimension of each action
+            seed (int): Random seed
+            hidden_size (int): Number of nodes in hidden layers
+            leak: amount of leakiness in leaky relu
         """
         super(Actor, self).__init__()
-        self.leak = config.leak
-        self.seed = torch.manual_seed(config.seed)
-        self.hdl1 = nn.Linear(config.state_dim, config.hdl1)
-        self.hdl2 = nn.Linear(config.hdl1, config.hdl2)
-        self.hdl3 = nn.Linear(config.hdl2, config.action_dim)
-        self.batch_norm = nn.BatchNorm1d(config.state_dim)
-        self.reset_weights()
+        self.leak = leak
+        self.seed = torch.manual_seed(seed)
 
-    def reset_weights(self):
-        """ Initilaize the weights  """
-        torch.nn.init.kaiming_normal_(self.hdl1.weight.data, a=self.leak, mode='fan_in')
-        torch.nn.init.kaiming_normal_(self.hdl2.weight.data, a=self.leak, mode='fan_in')
-        torch.nn.init.uniform_(self.hdl3.weight.data, -3e-3, 3e-3)
+        self.fc1 = nn.Linear(state_size, fc1)
+        self.fc2 = nn.Linear(fc1, fc2)
+        self.fc3 = nn.Linear(fc2, action_size)
+
+        self.bn = nn.BatchNorm1d(state_size)
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        """ Initilaize the weights using He et al (2015) weights """
+        torch.nn.init.kaiming_normal_(self.fc1.weight.data, a=self.leak, mode='fan_in')
+        torch.nn.init.kaiming_normal_(self.fc2.weight.data, a=self.leak, mode='fan_in')
+        torch.nn.init.uniform_(self.fc3.weight.data, -3e-3, 3e-3)
 
     def forward(self, state):
-        """actor (policy) network  maps states to actions.
-
-        Args:
-            param1: (torch) state
-        """
-        state = self.batch_norm(state)
-        x = F.leaky_relu(self.hdl1(state), negative_slope=self.leak)
-        x = F.leaky_relu(self.hdl2(x), negative_slope=self.leak)
-        x = torch.tanh(self.hdl3(x))
+        """Build an actor (policy) network that maps states -> actions."""
+        state = self.bn(state)
+        x = F.leaky_relu(self.fc1(state), negative_slope=self.leak)
+        x = F.leaky_relu(self.fc2(x), negative_slope=self.leak)
+        x =  torch.tanh(self.fc3(x))
         return x
 
 
 class Critic(nn.Module):
-    """ Critic Network implementaion """
-    def __init__(self, config):
+    def __init__(self, state_size, action_size, fc1=256, fc2=128, fc3=128, leak=0.01, seed=0):
         """Initialize parameters and build model.
-
-        Args:
-            param1: (config)
+        Params
+        ======
+            state_size (int): Dimension of each state
+            action_size (int): Dimension of each action
+            seed (int): Random seed
+            fcs1_units (int): Number of nodes in the first hidden layer
+            fc2_units (int): Number of nodes in the second hidden layer
+            hidden_size:
         """
-        self.leak = config.leak
-        self.seed = torch.manual_seed(config.seed)
-        self.batch_norm = nn.BatchNorm1d(config.state_dim)
-        self.hdl1 = nn.Linear(config.state_dim, config.hdl1)
-        self.hdl2 = nn.Linear(config.hdl1 + config.action_dim, config.hdl2)
-        self.hdl3 = nn.Linear(config.hdl2, config.hdl3)
-        self.hdl4 = nn.Linear(config.hdl3, 1)
-        self.reset_weights()
+        super(Critic, self).__init__()
+        self.leak = leak
+        self.seed = torch.manual_seed(seed)
+        self.bn = nn.BatchNorm1d(state_size)
+        self.fcs1 = nn.Linear(state_size, fc1)
+        self.fc2 = nn.Linear(fc1 + action_size, fc2)
+        self.fc3 = nn.Linear(fc2, fc3)
+        self.fc4 = nn.Linear(fc3, 1)
+        self.reset_parameters()
 
-    def reset_weights(self):
-        """ Initilaize the weights
+    def reset_parameters(self):
+        """ Initilaize the weights using He et al (2015) weights """
+        torch.nn.init.kaiming_normal_(self.fcs1.weight.data, a=self.leak, mode='fan_in')
+        torch.nn.init.kaiming_normal_(self.fc2.weight.data, a=self.leak, mode='fan_in')
+        torch.nn.init.uniform_(self.fc3.weight.data, -3e-3, 3e-3)
 
-        """
-        torch.nn.init.kaiming_normal_(self.hdl1.weight.data, a=self.leak, mode='fan_in')
-        torch.nn.init.kaiming_normal_(self.hdl2.weight.data, a=self.leak, mode='fan_in')
-        torch.nn.init.uniform_(self.hdl3.weight.data, -3e-3, 3e-3)
-
-    def forward(self, states, actions):
-        """ Build a critic (value) network that maps (state, action) pairs -> Q-values.
-
-        Args:
-            param1: (torch) states
-            param2: (torch) actions
-
-        """
-        states = self.batch_norm(states)
-        x = F.leaky_relu(self.hdl1(states), negative_slope=self.leak)
-        x = torch.cat((x, actions), dim=1)
-        x = F.leaky_relu(self.hdl2(x), negative_slope=self.leak)
-        x = F.leaky_relu(self.hdl3(x), negative_slope=self.leak)
-        x = self.hdl4(x)
+    def forward(self, state, action):
+        """ Build a critic (value) network that maps (state, action) pairs -> Q-values."""
+        state = self.bn(state)
+        x = F.leaky_relu(self.fcs1(state), negative_slope=self.leak)
+        x = torch.cat((x, action), dim=1)
+        x = F.leaky_relu(self.fc2(x), negative_slope=self.leak)
+        x = F.leaky_relu(self.fc3(x), negative_slope=self.leak)
+        x =  self.fc4(x)
         return x
