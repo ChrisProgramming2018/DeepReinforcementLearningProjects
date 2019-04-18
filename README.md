@@ -11,4 +11,4 @@ This repository contains the projects of the Deep Reinforcement Learning Nanodeg
 
 1.Clone the repository (if you haven't already!)
 ```bash
-git clone https://github.com/udacity/deep-reinforcement-learning.git
+https://github.com/ChrisProgramming2018/DeepReinforcementLearningProjects
