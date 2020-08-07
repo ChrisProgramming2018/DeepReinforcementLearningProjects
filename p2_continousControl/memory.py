@@ -1,40 +1,28 @@
-""" Replay Buffer to save the experience of the agent """
-
-from collections import deque, namedtuple
-import random
-import torch
 import numpy as np
+import random
 
 class ReplayBuffer(object):
-    """Fixed-size buffer to store experience tuples."""
-    def __init__(self, config):
-        """Initialize a ReplayBuffer object.
 
-        Args:
-            param1: ()
-        """
-        self.memory = deque(maxlen=config.memory_capacity)  # internal memory (deque)
-        self.batch_size = config.batch_size
-        self.experience = namedtuple("Experience", field_names=["state", "action", "reward", "next_state", "done"])
-        self.device = config.device
+  def __init__(self, max_size=1e6):
+    self.storage = []
+    self.max_size = max_size
+    self.ptr = 0
 
-    def add(self, state, action, reward, next_state, done):
-        """Add a new experience to memory."""
-        e = self.experience(state, action, reward, next_state, done)
-        self.memory.append(e)
+  def add(self, transition):
+    if len(self.storage) == self.max_size:
+      self.storage[int(self.ptr)] = transition
+      self.ptr = (self.ptr + 1) % self.max_size
+    else:
+      self.storage.append(transition)
 
-    def sample(self):
-        """Randomly sample a batch of experiences from memory."""
-        experiences = random.sample(self.memory, k=self.batch_size)
-
-        states = torch.from_numpy(np.vstack([e.state for e in experiences if e is not None])).float().to(self.device)
-        actions = torch.from_numpy(np.vstack([e.action for e in experiences if e is not None])).float().to(self.device)
-        rewards = torch.from_numpy(np.vstack([e.reward for e in experiences if e is not None])).float().to(self.device)
-        next_states = torch.from_numpy(np.vstack([e.next_state for e in experiences if e is not None])).float().to(self.device)
-        dones = torch.from_numpy(np.vstack([e.done for e in experiences if e is not None]).astype(np.uint8)).float().to(self.device)
-
-        return (states, actions, rewards, next_states, dones)
-
-    def size(self):
-        """Return the current size of internal memory."""
-        return len(self.memory)
+  def sample(self, batch_size):
+    ind = np.random.randint(0, len(self.storage), size=batch_size)
+    batch_states, batch_next_states, batch_actions, batch_rewards, batch_dones = [], [], [], [], []
+    for i in ind: 
+      state, next_state, action, reward, done = self.storage[i]
+      batch_states.append(np.array(state, copy=False))
+      batch_next_states.append(np.array(next_state, copy=False))
+      batch_actions.append(np.array(action, copy=False))
+      batch_rewards.append(np.array(reward, copy=False))
+      batch_dones.append(np.array(done, copy=False))
+    return np.array(batch_states), np.array(batch_next_states), np.array(batch_actions), np.array(batch_rewards).reshape(-1, 1), np.array(batch_dones).reshape(-1, 1)
